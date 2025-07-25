@@ -3,8 +3,10 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 
-X = pd.read_csv("Testing Data.csv")
-y = pd.read_csv("Testing Truth.csv")
+merged_data = pd.read_csv("mrds_naics_merge.csv")
+
+X = pd.read_csv("Training Data.csv")
+y = pd.read_csv("Training Truth.csv")
 X_tensor = torch.tensor(X.values, dtype=torch.float32)
 y_tensor = torch.tensor(y.values, dtype=torch.float32)
 print(torch.isnan(X_tensor).any(), torch.isnan(y_tensor).any())
@@ -29,7 +31,7 @@ class NeuralNetwork(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(23, 64),
+            nn.Linear(5, 64), # Adjust input size based on features
             nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),
@@ -40,7 +42,7 @@ class NeuralNetwork(nn.Module):
 
 model = NeuralNetwork()
 loss_fn = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-1) #can adjust learning rate if needed
 
 num_epochs = 100
 
