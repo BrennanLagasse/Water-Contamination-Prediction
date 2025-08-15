@@ -17,7 +17,7 @@ from sklearn.preprocessing import RobustScaler, StandardScaler
 import matplotlib.pyplot as plt
 
 X = pd.read_csv('trainingfinal.csv')
-y = pd.read_csv('arsenics_real.csv')
+y = pd.read_csv('arsenicstrue.csv')
 X = X.values.astype(np.float32)
 X = StandardScaler().fit_transform(X)
 y = y.values.astype(np.float32).reshape(-1, 1)
