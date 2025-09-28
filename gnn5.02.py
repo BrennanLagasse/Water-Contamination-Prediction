@@ -56,71 +56,6 @@ from haversine import haversine, Unit
 from sklearn.neighbors import BallTree
 import numpy as np
 
-def build_multi_feature_graph(X, k_spatial=5, radius_km=25, k_soil=5):
-    edges = set()
-
-    # ------------------------
-    # 1. Spatial edges (lat/lon, Haversine via BallTree)
-    # ------------------------
-    print("Coords")
-    coords = np.radians(X[["ActivityLocation/LatitudeMeasure", 
-                           "ActivityLocation/LongitudeMeasure"]].values)
-
-    tree = BallTree(coords, metric="haversine")
-
-    # radius query (returns neighbors within radius_km)
-    radius = radius_km / 6371.0  # Earth radius in km
-    ind = tree.query_radius(coords, r=radius)
-    for i, neighbors in enumerate(ind):
-        for j in neighbors:
-            if i != j:
-                edges.add((i, j))
-
-    # also add kNN fallback
-    _, indices = tree.query(coords, k=k_spatial)
-    for i, nbrs in enumerate(indices):
-        for j in nbrs:
-            if i != j:
-                edges.add((i, j))
-
-    # ------------------------
-    # 2. Hydrological edges
-    # ------------------------
-    """
-    print("Hydrological")
-    huc_cols = [c for c in X.columns if c.startswith("HUCEightDigitCode_emb")]
-    huc = X[huc_cols].values
-    unique_codes, inv = np.unique(huc, axis=0, return_inverse=True)
-    for code_id in range(len(unique_codes)):
-        idx = np.where(inv == code_id)[0]
-        if len(idx) > 1:
-            # connect group densely
-            for i in idx:
-                for j in idx:
-                    if i != j:
-                        edges.add((i, j))
-    """
-    # ------------------------
-    # 3. Soil similarity edges (fast top-k with cosine)
-    # ------------------------
-    """
-    print("Soil")
-    soil_cols = ["sandtotal_r", "silttotal_r", "claytotal_r", "om_r", "awc_r", "ph1to1h2o_r"]
-    soil_feats = X[soil_cols].fillna(0).values
-    sim = cosine_similarity(soil_feats)
-    topk_idx = np.argpartition(-sim, kth=k_soil, axis=1)[:, 1:k_soil+1]
-    for i, nbrs in enumerate(topk_idx):
-        for j in nbrs:
-            edges.add((i, j))
-    """
-    # ------------------------
-    # Convert to edge_index
-    # ------------------------
-    edge_index = torch.tensor(list(edges), dtype=torch.long).t().contiguous()
-    return edge_index
-
-
-# usage:
 coords = X[["ActivityLocation/LatitudeMeasure",
             "ActivityLocation/LongitudeMeasure"]].values
 
@@ -377,7 +312,7 @@ class BetterGIN(nn.Module):
 # ======================
 # model = BetterGAT(data.num_features, 128, 1, num_layers=4, heads=4, dropout=0.3, jk="max").to(device) #5.08
 # model = BetterGraphSAGE(data.num_features, 128, 1, num_layers=3, dropout=0.3, jk="cat").to(device) #5.06
-model = BetterGIN(data.num_features, 128, 1, num_layers=5, dropout=0.4, jk="last").to(device)
+model = BetterGIN(data.num_features, 128, 1, num_layers=5, dropout=0.6, jk="last").to(device)
 
 #model = BetterGCN(in_channels=data.num_features, hidden_channels=256, out_channels=1, num_layers=5, dropout=0.2, edge_dropout_p=0.1, activation="gelu", norm="batch", residual=True, jk="max").to(device)
 
@@ -403,7 +338,7 @@ for epoch in range(500):
     model.eval()
     with torch.no_grad():
         val_loss = criterion(output[val_mask], data.y[val_mask]).item()
-
+    
     train_loss_list.append(train_loss)
     val_loss_list.append(val_loss)
 
