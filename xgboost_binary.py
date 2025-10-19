@@ -1,4 +1,3 @@
-
 '''
 # For the Jupyter Notebook
 !pip install pandas
@@ -35,13 +34,27 @@ from xgboost import XGBClassifier
 from imblearn.under_sampling import RandomUnderSampler
 
 #Load data
-df = pd.read_csv("wqp_mrds_naics_merge.csv")
+df_x = pd.read_csv("test2.csv")
+df_y = pd.read_csv("testTruth.csv")
 
 #Use WHO threshold 10 µg/L to create labels (1 = dangerous, 0 = safe)
-y = (df["ArsenicMeasureValue"] > 10).astype(int)
+y = (df_y["ResultMeasureValue"] > 10).astype(int)
 
 # Drop measurements from features to prevent leakage
-X = df.drop(columns=["ArsenicMeasureValue"])
+X = df_x.drop(columns=["CharacteristicName"])
+
+'''
+X = df_x.drop(columns=["id", "ResultSampleFractionText_emb_0", "ResultSampleFractionText_emb_1",
+                       "StateCode_emb_0", "StateCode_emb_1", "StateCode_emb_2",
+                       "StateCode_emb_3", "StateCode_emb_4", "CountyCode_emb_0",
+                       "CountyCode_emb_1", "CountyCode_emb_2", "CountyCode_emb_3",
+                       "CountyCode_emb_4", "CountyCode_emb_5", "CountyCode_emb_6",
+                       "CountyCode_emb_7", "HUCEightDigitCode_emb_0", "HUCEightDigitCode_emb_1",
+                       "HUCEightDigitCode_emb_2", "HUCEightDigitCode_emb_3",
+                       "HUCEightDigitCode_emb_4", "HUCEightDigitCode_emb_5",
+                       "HUCEightDigitCode_emb_6", "HUCEightDigitCode_emb_7",
+                       "HUCEightDigitCode_emb_8", "HUCEightDigitCode_emb_9"])
+'''
 
 #Look at column types and identify if numeric or categorical
 numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
@@ -57,7 +70,7 @@ print("Finished splitting into train and test")
 
 #Fix class imbalance with random undersampling
 # For 1:1 (pos:neg), pos fraction = 0.5
-rus = RandomUnderSampler(sampling_strategy=0.5, random_state=42)
+rus = RandomUnderSampler(sampling_strategy='auto', random_state=42)
 
 X_train, y_train = rus.fit_resample(X_train, y_train)
 
@@ -173,19 +186,6 @@ print(f"Balanced Accuracy: {bal_acc:.4f}")
 print(f"Cohen's Kappa: {kappa:.4f}")
 print(f"ROC AUC: {roc_auc:.4f}")
 print(f"PR AUC (Average Precision): {pr_auc:.4f}")
-
-'''
-#Save test predicitions
-out = pd.DataFrame({
-    "index": X_test.index,
-    "y_true": y_test.values,
-    "proba_dangerous": test_proba,
-    "pred_dangerous_tuned": test_preds
-})
-out_path = "xgb_test_predictions.csv"
-out.to_csv(out_path, index=False)
-print(f"\nSaved test predictions to: {out_path}")
-'''
 
 #Look at feature importance
 try:
