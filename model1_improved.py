@@ -14,49 +14,28 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader, TensorDataset
 
-# ===== Load Data =====
-df_x = pd.read_csv("test2.csv")
-df_y = pd.read_csv("testTruth.csv")
+# ===== LOAD DATA =====
+df = pd.read_csv("test2.csv")
+truth = pd.read_csv("testTruth.csv")
+df_x = df.drop(columns=["CharacteristicName", "id"])
 
-y = (df_y['ResultMeasureValue'] > 10).astype(int)
-#X = df_x
-X = df_x.drop(columns=["id", "ResultSampleFractionText_emb_0", "ResultSampleFractionText_emb_1",
-                       "StateCode_emb_0", "StateCode_emb_1", "StateCode_emb_2",
-                       "StateCode_emb_3", "StateCode_emb_4", "CountyCode_emb_0",
-                       "CountyCode_emb_1", "CountyCode_emb_2", "CountyCode_emb_3",
-                       "CountyCode_emb_4", "CountyCode_emb_5", "CountyCode_emb_6",
-                       "CountyCode_emb_7", "HUCEightDigitCode_emb_0", "HUCEightDigitCode_emb_1",
-                       "HUCEightDigitCode_emb_2", "HUCEightDigitCode_emb_3",
-                       "HUCEightDigitCode_emb_4", "HUCEightDigitCode_emb_5",
-                       "HUCEightDigitCode_emb_6", "HUCEightDigitCode_emb_7",
-                       "HUCEightDigitCode_emb_8", "HUCEightDigitCode_emb_9"])
+mask = df["CharacteristicName"] == "Arsenic"
+X = df[mask].drop(["CharacteristicName", "id"], axis=1)
+y = truth["ResultMeasureValue"][mask]
 
-# ===== Identify numeric & categorical columns =====
-numeric_cols = X.select_dtypes(include=['int64', 'float64']).columns
-categorical_cols = X.select_dtypes(include=['object', 'category']).columns
+# Filter valid target values
+mask_valid = (y >= 0) & (~np.isnan(y)) & (~np.isinf(y))
+X = X[mask_valid].reset_index(drop=True)
+y = y[mask_valid].reset_index(drop=True)
 
-print(f"Numeric columns: {len(numeric_cols)}")
-print(f"Categorical columns: {len(categorical_cols)}")
+# Convert X to float and scale
+X = X.values.astype(np.float32)
+scaler = StandardScaler()
+X = scaler.fit_transform(X)
 
-# ===== Preprocessing =====
-numeric_pipeline = Pipeline([
-    ("imputer", SimpleImputer(strategy="median")),
-    ("scaler", StandardScaler())
-])
-
-categorical_pipeline = Pipeline([
-    ("imputer", SimpleImputer(strategy="most_frequent")),
-    ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=True))
-])
-
-preprocess = ColumnTransformer(
-    transformers=[
-        ("num", numeric_pipeline, numeric_cols),
-        ("cat", categorical_pipeline, categorical_cols)
-    ],
-    remainder='drop',
-    sparse_threshold=1.0
-)
+# Binarize target for classification
+THRESHOLD = 10.0
+y = (y >= THRESHOLD).astype(int)  # 0 or 1
 
 # ===== Train/Test Split =====
 X_train, X_test, y_train, y_test = train_test_split(
@@ -65,21 +44,10 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 print("Finished splitting into train and test")
 
-# ===== Fit and Transform =====
-X_train_processed = preprocess.fit_transform(X_train)
-X_test_processed = preprocess.transform(X_test)
-
-# Convert to dense arrays if sparse
-if hasattr(X_train_processed, "toarray"):
-    X_train_processed = X_train_processed.toarray()
-    X_test_processed = X_test_processed.toarray()
-
-print(f"After preprocessing: {X_train_processed.shape[1]} features")
-
 # ===== Convert to Tensors =====
-X_train_tensor = torch.tensor(X_train_processed, dtype=torch.float32)
+X_train_tensor = torch.tensor(X_train, dtype=torch.float32) #CHECK
 y_train_tensor = torch.tensor(y_train.values, dtype=torch.float32).unsqueeze(1)
-X_test_tensor = torch.tensor(X_test_processed, dtype=torch.float32)
+X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
 y_test_tensor = torch.tensor(y_test.values, dtype=torch.float32).unsqueeze(1)
 
 # Split train into train/validation (80/20)
@@ -112,7 +80,7 @@ class BinaryClassifier(nn.Module):
         x = self.dropout(F.relu(self.bn2(self.layer_2(x))))
         return self.output_layer(x)
 
-input_size = X_train_processed.shape[1]
+input_size = X_train.shape[1]
 model = BinaryClassifier(input_size)
 
 # ===== Class-weighted Loss =====
@@ -258,3 +226,27 @@ plt.title("Accuracy Over Time")
 plt.legend()
 plt.grid(True)
 plt.show()
+
+# ===== SHAP IMPORT =====
+import shap
+
+# ===== Prepare SHAP Background =====
+# Use a small subset of training data for background (for speed)
+background = X_train_tensor[:100]  # adjust if your training set is small
+X_test_sample = X_test_tensor[:100]  # subset of test set for SHAP
+
+# ===== Create SHAP Explainer =====
+explainer = shap.GradientExplainer(model, background)
+
+# ===== Compute SHAP Values =====
+shap_values = explainer.shap_values(X_test_sample)
+
+# ===== Convert tensors to numpy for plotting =====
+X_test_sample_np = X_test_sample.numpy()
+
+# ===== Plot SHAP Summary =====
+# Bar plot: mean absolute SHAP values per feature
+shap.summary_plot(shap_values, X_test_sample_np, feature_names=df_x.columns)
+
+# Optional: Beeswarm plot (more detailed view of feature impact)
+shap.summary_plot(shap_values, X_test_sample_np, feature_names=df_x.columns, plot_type="dot")
