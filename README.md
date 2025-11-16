@@ -1,0 +1,4 @@
+# Predictions of Groundwater Arsenic Concentrations using Graph Neural Networks
+
+## Project Info
+In this project, we use different machine learning models including random forests, neural networks, gradient boosted trees, and a variety of graph neural networks to predict the amount of arsenic contamination in water across the continental United States. To improve predictive performance, we design our own comprehensive dataset containing 74,706 samples and 115 features derived from multiple public data sources. These features capture critical geological, hydrological, and environmental factors that collectively enhance the accuracy of arsenic contamination prediction.
