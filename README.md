@@ -9,89 +9,119 @@ To develop a unified, feature-rich, and spatially consistent dataset for arsenic
 1. Water Quality Portal ([WQP – EPA, USGS, and NOAA](https://www.waterqualitydata.us/))
 
 The WQP contains well-level arsenic measurements, metadata about sampling frequency, and accompanying water chemistry parameters. This dataset serves as the primary source of ground truth labels for our target variable: arsenic concentration (µg/L). After filtering and quality-control processing, we retained laboratory-verified arsenic observations along with spatial coordinates and temporal sampling metadata.
-Purpose in the model: Defines the regression target and provides geolocated observations for supervised learning and geospatial modeling.
 
-Direct Download Instructions: View the link in the title. For country, select "United States". **Incomplete**
+**Purpose in the model**: Defines the regression target and provides geolocated observations for supervised learning and geospatial modeling.
+
+**Direct Download Instructions**: View the link in the title. For country, select "United States". **Incomplete**
 
 2. USGS Mineral Resources Data System ([MRDS](https://mrdata.usgs.gov/mrds/))
 
 The MRDS characterizes geological provinces, mineral deposits, ore bodies, mining districts, and regional bedrock composition. We extracted categorical and numeric features related to ore type, deposit geology, land status, production history, and material composition. These features are strong predictors because arsenic is commonly mobilized from sulfide minerals, sedimentary formations, and geothermal zones.
-Purpose in the model: Adds geological context and provides coarse spatial priors for arsenic mobilization risk.
 
-Direct Download Instructions: View the link in the title and download this file: "rdbms-tab-all.zip".
+**Purpose in the model**: Adds geological context and provides coarse spatial priors for arsenic mobilization risk.
+
+**Direct Download Instructions**: View the link in the title and download this file: "rdbms-tab-all.zip".
 
 3. gNATSGO Soil Chemistry and Hydrology Dataset (https://nrcs.app.box.com/v/soils/folder/233393842838)
 
 The gNATSGO database provides detailed soil chemical composition, organic matter content, clay fraction, pH, depth-to-restrictive layer, drainage class, and hydrologic properties at high spatial resolution (10–30 m to 250 m depending on layers). We spatially interpolated soil attributes to each WQP sampling coordinate using geodesic nearest-neighbor extraction.
-Purpose in the model: Constrains subsurface arsenic mobility via sediment composition, grain size, redox buffering capacity, organic carbon content, and aquifer recharge conditions.
 
-Direct Download Instructions: View the link in the title and download this file: "gNATSGO_02_03_2025.7z".
+**Purpose in the model**: Constrains subsurface arsenic mobility via sediment composition, grain size, redox buffering capacity, organic carbon content, and aquifer recharge conditions.
+
+**Direct Download Instructions**: View the link in the title and download this file: "gNATSGO_02_03_2025.7z".
 
 ## Training Dataset Creation Pipeline
-This section summarizes how the final training dataset was engineered from WQP, MRDS, and gNATSGO data sources. Each source is cleaned individually, then merged into a single prediction-ready dataset.
 
-1. WQP Cleaning
+The final training dataset is engineered by independently cleaning three major data sources (WQP, MRDS, and gNATSGO), enriching each sample with geological and soil attributes, and merging all processed layers into a unified prediction-ready table.
 
-File: WQP Cleaning.py
-Purpose: Cleans raw WQP water quality data by:
+---
 
-Filtering valid arsenic measurements
+### **1. WQP Cleaning**
 
-Standardizing numeric types and coordinates
+**File:** `WQP Cleaning.py`  
+**Purpose:** Cleans raw water quality measurements by:
 
-Removing malformed values and duplicate rows
+- Filtering for valid arsenic samples
+- Standardizing numeric fields and geographic coordinates
+- Removing malformed values and duplicated records
 
-Output: Cleaned WQP arsenic sample table with valid lat/lon values.
+**Output:** A clean WQP sample table containing only high-quality arsenic measurements with accurate lat/lon values.
 
-2. MRDS Preprocessing and Cleaning
+---
 
-Step 1 — Convert text tables to CSV
-File: MRDS_txt_to_csv.py
-Converts MRDS .txt attribute tables into consistent .csv files, preserving empty columns and formatting.
+### **2. MRDS Preprocessing and Cleaning**
 
-Step 2 — Merge MRDS attribute tables
-File: MRDS Merged Creation.py
-Joins all MRDS tables using dep_id and aggregates multi-valued fields.
+#### **Step A — Convert TXT to CSV**
 
-Step 3 — Clean final MRDS table
-File: MRDS Cleaning.py
-Cleans and standardizes merged MRDS attributes, removes sparse fields, and formats coordinates.
+**File:** `MRDS_txt_to_csv.py`  
+Converts raw MRDS `.txt` attribute tables into consistent `.csv` files while:
 
-Step 4 — Compute geological distance features
-File: Haversine Merging.py
-Calculates distance between each WQP sample location and the nearest MRDS deposit using the haversine formula, adding proximity-based geological features.
+- Preserving empty fields
+- Normalizing spacing
+- Removing quote artifacts
 
-Output: WQP + MRDS enriched dataset with geological context.
+#### **Step B — Merge MRDS Attribute Tables**
 
-3. gNATSGO Mapping and Cleaning
+**File:** `MRDS Merged Creation.py`  
+Aggregates all MRDS tables using `dep_id` and consolidates multi-valued attributes into single unified rows.
 
-GIS Mapping (external, not Python)
-Spatially joins WQP+MRDS sample points to gNATSGO soil raster layers.
-Extracted attributes include soil chemistry, hydrology, permeability, organic matter, and related soil features.
+#### **Step C — Clean MRDS Attributes**
 
-Cleaning step
-File: GNATSgO Cleaning.py
-Cleans and standardizes extracted soil attributes.
+**File:** `MRDS Cleaning.py`  
+Cleans the merged MRDS dataset by:
 
-Output: WQP + MRDS + gNATSGO enriched dataset.
+- Dropping highly sparse fields
+- Standardizing coordinates and geologic fields
+- Normalizing text attributes
 
-4. Final Dataset Assembly
+#### **Step D — Compute Geological Distance Features**
 
-File: Final Dataset Creation.py
-Merges all cleaned data sources into a single table, harmonizes field types, removes invalid rows, and prepares the final training-ready dataset.
+**File:** `Haversine Merging.py`  
+Computes the distance between each WQP sample and its nearest MRDS deposit using the haversine formula, adding new geological proximity features.
 
-Final Output
+**Output:** A WQP + MRDS enriched dataset containing both sample chemistry and contextual geologic information.
 
-Rows: 74,706
+---
 
-Features: 115 engineered features
+### **3. gNATSGO Mapping and Cleaning**
 
-Sources: WQP measurements + MRDS geological attributes + gNATSGO soil/hydrology layers
+#### **Spatial Mapping (External GIS Step)**  
+WQP + MRDS sample points are spatially joined to gNATSGO soil raster layers using GIS software (e.g., QGIS or ArcGIS). Extracted attributes include:
 
-Purpose: Used for all ML and GNN arsenic prediction experiments.
+- Soil chemistry
+- Hydrologic factors
+- Permeability
+- Organic matter
+- Other environmental soil variables
+
+#### **Cleaning Step**
+
+**File:** `gNATSGO Cleaning.py`  
+Standardizes soil attributes, removes invalid extractions, and prepares soil features for merging.
+
+**Output:** A WQP + MRDS + gNATSGO feature-rich dataset with geologic and soil layer context.
+
+---
+
+### **4. Final Dataset Assembly**
+
+**File:** `Final Dataset Creation.py`  
+Merges all processed layers into one unified table:
+
+- Harmonizes field types and units
+- Removes invalid or mismatched rows
+- Ensures all samples have complete location, geologic, and soil attributes
+
+---
+
+### Final Output Summary
+
+- **Rows:** 74,706 samples  
+- **Features:** 115 engineered predictors  
+- **Sources:** WQP measurements + MRDS geological attributes + gNATSGO soil/hydrology layers  
+- **Usage:** Serves as the master dataset for all boosted models and GNN prediction experiments.
 
 ## Core Modeling Pipeline
-# Core Modeling Pipeline
 
 This repository includes four experiment families:
 
@@ -104,9 +134,9 @@ All models use the same engineered dataset and identical evaluation metrics, ena
 
 ---
 
-## Tree-Based Models
+### Tree-Based Models
 
-### `gb_boosted_trees.py`
+#### `gb_boosted_trees.py`
 This file trains several boosted ensemble models, including **XGBoost**, **LightGBM**, and **CatBoost**. Each model is already defined inside the script, but only one runs at a time.
 
 To switch between models, simply **uncomment one block at a time**, for example:
@@ -127,7 +157,7 @@ This allows **direct performance comparison without modifying the pipeline**.
 
 ---
 
-### `random_forest.py`
+#### `random_forest.py`
 This script trains a baseline Random Forest model using the same processed dataset. No configuration changes are needed — just run:
 
 ```
@@ -138,9 +168,9 @@ The Random Forest serves as a strong baseline for comparison against boosted tre
 
 ---
 
-## Fully Connected Neural Network
+### Fully Connected Neural Network
 
-### `neural_network.py`
+#### `neural_network.py`
 This file trains a standard feedforward neural network (no graph structure). It uses the same dataset filtering, scaling, and evaluation methodology as the tree-based and graph-based models.
 
 To run:
@@ -153,13 +183,13 @@ This provides a non-graph neural baseline that models nonlinear relationships in
 
 ---
 
-# Graph Neural Networks
+### Graph Neural Networks
 
 Our spatial models use **k-nearest neighbors over latitude/longitude coordinates** to define edge connectivity. This turns the dataset into a geographical graph where each node represents a sampling site and edges connect geographically nearby points.
 
 ---
 
-### `graph_models.py`
+#### `graph_models.py`
 This file contains **all GNN architecture definitions**, including:
 
 - **GCN**
@@ -174,7 +204,7 @@ You do **not** train models inside this file — you only define them.
 
 ---
 
-### `graph_model_training.py`
+#### `graph_model_training.py`
 This script performs **all GNN experimentation**, including:
 
 - Loading the dataset
@@ -202,13 +232,13 @@ This requires **no changes** to the dataset, masks, or training loop.
 
 ---
 
-# Target Scaling Strategies
+### Target Scaling Strategies
 
 We evaluated models under two different target-space configurations.
 
 ---
 
-### **1. Logarithmic Scale**
+#### **1. Logarithmic Scale**
 To stabilize skewed arsenic concentration distributions, we transform:
 
 ```
@@ -225,7 +255,7 @@ This was our primary evaluation space.
 
 ---
 
-### **2. Real Concentration Scale**
+#### **2. Real Concentration Scale**
 For interpretability on physical units (µg/L), we also evaluated:
 
 - Using raw arsenic values
@@ -239,7 +269,7 @@ This allows comparison between:
 
 ---
 
-# Running Experiments
+### Running Experiments
 
 Each experiment is standalone and can be executed directly from the root of the project:
 
@@ -257,11 +287,10 @@ To switch between variants:
 
 No additional configuration is required.
 
-## Our Results
+### Our Results
 Below shows a table containing our results after running all experiments
-![Prediction Results](Error and Analysis Images/error_results.png)
+![Prediction Results]("Error and Analysis Images/error_results.png")
 
-## Further Result Analysis
 ## Further Result Analysis
 
 After training our core models, all post-training visualization and diagnostic evaluation is performed using the following scripts:
