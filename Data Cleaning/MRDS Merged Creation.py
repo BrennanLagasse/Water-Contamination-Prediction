@@ -1,7 +1,5 @@
 import pandas as pd
 pd.set_option("display.max_columns", None)
-import os
-print("Saving to:", os.getcwd())
 
 # Column selection first based on usefulness, then further columns removed based on % missing and duplicates
 ages = pd.read_csv("MRDS/Ages.csv") # Columns 80% empty and removed after

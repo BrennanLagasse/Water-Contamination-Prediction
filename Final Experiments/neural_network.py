@@ -13,8 +13,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 # Load Data
-df = pd.read_csv("test2.csv")
-truth = pd.read_csv("testTruth.csv")
+df = pd.read_csv("final_dataset.csv")
+truth = pd.read_csv("final_dataset_truth.csv")
 
 mask = df["CharacteristicName"] == "Arsenic"
 X = df[mask]

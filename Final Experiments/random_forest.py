@@ -5,8 +5,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Load Data
-df = pd.read_csv("test2.csv")
-truth = pd.read_csv("testTruth.csv")
+df = pd.read_csv("final_dataset.csv")
+truth = pd.read_csv("final_dataset_truth.csv")
 
 mask = df["CharacteristicName"] == "Arsenic"
 X = df[mask]

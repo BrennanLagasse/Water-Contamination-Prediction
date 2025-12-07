@@ -24,6 +24,5 @@ plt.ylabel("Number of Samples")
 plt.title("Dsitribution of Samples across Time")
 plt.show()
 
-df.to_csv("test.csv", index=False)
-df2.to_csv("test2.csv", index=False)
-truth.to_csv("testTruth.csv", index=False)
+df2.to_csv("final_dataset.csv", index=False)
+truth.to_csv("final_dataset_truth.csv", index=False)
