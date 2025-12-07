@@ -288,25 +288,26 @@ To switch between variants:
 No additional configuration is required.
 
 ### Our Results
-Below shows a table containing our results after running all experiments
-![Prediction Results]("Error and Analysis Images/error_results.png")
+![Prediction Results](Error%20and%20Analysis%20Images/error_results.png)
+<br>
+Above shows a table containing our results for comparison after running all experiments.
 
 ## Further Result Analysis
 
 After training our core models, all post-training visualization and diagnostic evaluation is performed using the following scripts:
 
-- **`gb_boosted_graph.py`**
-- **`graph_model_training.py`**
+- `gb_boosted_graph.py`
+- `graph_model_training.py`
 
 ### What These Scripts Produce
 
 Running these files generates a variety of plots that allow deeper insight into model performance, including:
 
-- **Predicted vs. Actual scatter plots**
-- **Train vs. Validation loss curves**
-- **Spatial error heatmaps for graph-based models**
-- **Residual distributions**
-- **Comparison of log-scaled predictions vs. real-scale predictions**
+- Predicted vs. Actual scatter plots
+- Train vs. Validation loss curves
+- Spatial error heatmaps for graph-based models
+- Residual distributions
+- Comparison of log-scaled predictions vs. real-scale predictions
 
 ### How To Run
 
@@ -340,12 +341,12 @@ Model performance would likely improve with additional geoscience layers, includ
 - High-resolution soil permeability or porosity maps
 - Land-use and industrial activity layers
 
-These features would increase the predictive power of both tree models and GNNs by capturing **drivers of arsenic mobility**, not just static chemistry data.
+These features would increase the predictive power of both tree models and GNNs by capturing drivers of arsenic mobility, not just static chemistry data.
 
 ### **3. Unified Multi-Dataset Graph**
 Instead of merging WQP, MRDS, and gNATSGO into a flat table, a future model could:
-- Represent **each dataset as a different node type**
+- Represent each dataset as a different node type
 - Connect geologic nodes, soil nodes, and water sample nodes in a single heterogeneous graph  
-- Train a relational GNN to learn contamination from **interacting environmental processes**, rather than only point-level features
+- Train a relational GNN to learn contamination from interacting environmental processes, rather than only point-level features
 
-This would allow the model to learn **how soil chemistry, mineral resources, and spatial relationships jointly influence contamination**, offering a more scientifically grounded prediction framework.
+This would allow the model to learn how soil chemistry, mineral resources, and spatial relationships jointly influence contamination, offering a more scientifically grounded prediction framework.
