@@ -12,7 +12,7 @@ The WQP contains well-level arsenic measurements, metadata about sampling freque
 
 **Purpose in the model**: Defines the regression target and provides geolocated observations for supervised learning and geospatial modeling.
 
-**Direct Download Instructions**: View the link in the title. For country, select "United States". **Incomplete**
+**Direct Download Instructions**: View the link in the title. For the field `Country`, select `United States`. For `Site Type`, select `Well (NWIS, STORET)`. Move on to the next page, and for `Sample Media`, select `Water (NWIS, STEWARDS, STORET)`. For `Characteristic Group`, select `Inorganics, Major, Metals (NWIS, STEWARDS, STORET)`, `Inorganics, Major, Non-metals (NWIS, STEWARDS, STORET)`, `Inorganics, Minor, Metals (NWIS, STEWARDS, STORET)`, `Inorganics, Minor, Non-metals (NWIS, STEWARDS, STORET)`. Move on to the next page, and make one download using the previous selections for `Site Data Only` in the field `Data Profiles` and another download for `Sample Results (physical/chemical metadata)`.
 
 2. USGS Mineral Resources Data System ([MRDS](https://mrdata.usgs.gov/mrds/))
 
@@ -34,6 +34,7 @@ The gNATSGO database provides detailed soil chemical composition, organic matter
 
 The final training dataset is engineered by independently cleaning three major data sources (WQP, MRDS, and gNATSGO), enriching each sample with geological and soil attributes, and merging all processed layers into a unified prediction-ready table.
 
+The final datset we used for training can be found here: **[Water Contamination Dataset](https://huggingface.co/datasets/williamxing1/water-contamination-data/tree/main)** (Hugging Face)
 ---
 
 ### **1. WQP Cleaning**
@@ -86,7 +87,7 @@ Computes the distance between each WQP sample and its nearest MRDS deposit using
 ### **3. gNATSGO Mapping and Cleaning**
 
 #### **Spatial Mapping (External GIS Step)**  
-WQP + MRDS sample points are spatially joined to gNATSGO soil raster layers using GIS software (e.g., QGIS or ArcGIS). Extracted attributes include:
+WQP + MRDS sample points are spatially joined to gNATSGO soil raster layers using GIS software (e.g., QGIS or ArcGIS). For each of the points that lie inside a raster layer, extract the corresponding MUKEY and append this value to the dataset in a column called `mukey`. Furthermore, extract the files `chorizon.csv` and `component.csv` as these will be used to map the MUKEY to actual soil data. Atributes in these files include:
 
 - Soil chemistry
 - Hydrologic factors
@@ -96,8 +97,8 @@ WQP + MRDS sample points are spatially joined to gNATSGO soil raster layers usin
 
 #### **Cleaning Step**
 
-**File:** `gNATSGO Cleaning.py`  
-Standardizes soil attributes, removes invalid extractions, and prepares soil features for merging.
+**File:** `gNATSGO Cleaning.py`
+Standardizes soil attributes, removes invalid extractions, and adds in the soil features.
 
 **Output:** A WQP + MRDS + gNATSGO feature-rich dataset with geologic and soil layer context.
 

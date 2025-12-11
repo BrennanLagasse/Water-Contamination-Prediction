@@ -7,7 +7,7 @@ import torch.nn as nn
 pd.set_option("display.max_columns", None)
 pd.set_option("display.max_rows", None)
 print("Read 1")
-wqp_mrds = pd.read_csv("WQP + MRDS + gNATSGO (MUKEY Only).csv", dtype=str).rename(columns={"SAMPLE_1": "mukey"})
+wqp_mrds = pd.read_csv("WQP + MRDS + gNATSGO (MUKEY Only).csv", dtype=str)
 chorizon_cols = ["ph1to1h2o_r", "om_r", "claytotal_r", "sandtotal_r", "silttotal_r", "ksat_r", "awc_r", "ec_r", "sar_r", "caco3_r", "kwfact", "kffact", "dbthirdbar_r", "cokey"]
 print("Read 2")
 chorizon = pd.read_csv("chorizon.csv", usecols=chorizon_cols, dtype=str) # Shortened already for speed so just selects all columns
