@@ -1,9 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# Note: This file is created after running "WQP Cleaning" in the folder "Data Cleaning"
 df = pd.read_csv("(Cleaned) WQP Full Physical Chemical.csv")
-df2 = pd.read_csv("(Cleaned) WQP + MRDS + gNATSGO.csv")
-truth = pd.read_csv("Ground Truth.csv")
 
 df["ActivityStartDate"] = pd.to_datetime(df["ActivityStartDate"])
 mask = (
@@ -14,8 +13,9 @@ mask = (
 )
 
 df = df.loc[mask]
-df2 = df2.loc[mask]
-truth = truth.loc[mask]
 
-df2.to_csv("final_dataset.csv", index=False)
-truth.to_csv("final_dataset_truth.csv", index=False)
+plt.hist(df["ActivityStartDate"].dt.year, bins=40, edgecolor="black")
+plt.xlabel("Year")
+plt.ylabel("Number of Samples")
+plt.title("Distribution of Samples across Time")
+plt.show()
