@@ -20,49 +20,24 @@ if torch.cuda.is_available():
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("="*70)
 print(f"Using device: {device}")
-print("="*70)
 
 # Load Data
 print("\nLoading data...")
-df = pd.read_csv("test2.csv")
-truth = pd.read_csv("testTruth.csv")
-wqp_original = pd.read_csv("WQP Physical Chemical.csv", low_memory=False)
-station = pd.read_csv("WQP Station Metadata.csv", low_memory=False)
+df = pd.read_csv("final_dataset_with_huc.csv")
+truth = pd.read_csv("final_dataset_truth.csv")
 fold_assignments = pd.read_csv("huc4_fold_assignments.csv")
 
 # Filter to Arsenic only
 arsenic_mask = df["CharacteristicName"] == "Arsenic"
 X = df[arsenic_mask].copy()
 y = truth["ResultMeasureValue"][arsenic_mask].copy()
-X = X.drop(["CharacteristicName", "id"], axis=1)
+X = X.drop(["CharacteristicName", "id"], axis=1, errors='ignore')
 
 print(f"Initial X shape: {X.shape}")
 print(f"Initial y shape: {y.shape}")
 
-# Extract HUC4 from original WQP data then filter valid values
-print("\nExtracting HUC codes from original data...")
-wqp_arsenic = wqp_original[wqp_original["CharacteristicName"] == "Arsenic"].copy()
-
-# Merge with station data to get HUC codes
-wqp_with_huc = wqp_arsenic[["MonitoringLocationIdentifier", "ActivityLocation/LatitudeMeasure", 
-                             "ActivityLocation/LongitudeMeasure"]].merge(
-    station[["MonitoringLocationIdentifier", "LatitudeMeasure", "LongitudeMeasure", "HUCEightDigitCode"]],
-    on="MonitoringLocationIdentifier",
-    how="left"
-)
-
-# Fill missing coordinates
-wqp_with_huc['ActivityLocation/LatitudeMeasure'] = wqp_with_huc['ActivityLocation/LatitudeMeasure'].fillna(
-    wqp_with_huc['LatitudeMeasure'])
-wqp_with_huc['ActivityLocation/LongitudeMeasure'] = wqp_with_huc['ActivityLocation/LongitudeMeasure'].fillna(
-    wqp_with_huc['LongitudeMeasure'])
-
-# Extract HUC4 and add to X then filter
-X['HUC4'] = wqp_with_huc['HUCEightDigitCode'].astype(str).str[:4].astype(str)
-
-# Filter valid values
+# Apply valid value filter
 valid_mask = (y >= 0) & (~np.isnan(y)) & (~np.isinf(y))
 X = X[valid_mask].reset_index(drop=True)
 y = y[valid_mask].reset_index(drop=True)
@@ -70,14 +45,24 @@ y = y[valid_mask].reset_index(drop=True)
 print(f"After filtering - X shape: {X.shape}, y shape: {y.shape}")
 print(f"Median y: {y.median():.4f}")
 
+# Check for missing HUC4 codes
+missing_huc = X['HUC4'].isna().sum()
+print(f"Samples with missing HUC codes: {missing_huc}")
+
+if missing_huc > 0:
+    print(f"Dropping {missing_huc} samples without HUC codes...")
+    X = X.dropna(subset=['HUC4']).reset_index(drop=True)
+    y = y[X.index].reset_index(drop=True)
+
 # Merge with fold assignments
-fold_assignments['HUC4'] = fold_assignments['HUC4'].astype(str)
+fold_assignments['HUC4'] = fold_assignments['HUC4'].astype(str).str.zfill(4)
+X['HUC4'] = X['HUC4'].astype(str).str.split('.').str[0].str.zfill(4)
 X = X.merge(fold_assignments, on='HUC4', how='left')
 
 # Check for missing fold assignments
 missing_folds = X['fold'].isna().sum()
 if missing_folds > 0:
-    print(f"{missing_folds} samples have no fold assignment & will be dropped")
+    print(f"WARNING: {missing_folds} samples have no fold assignment. These will be dropped.")
     valid_fold_mask = X['fold'].notna()
     X = X[valid_fold_mask].reset_index(drop=True)
     y = y[valid_fold_mask].reset_index(drop=True)
@@ -92,7 +77,7 @@ X = X.drop(['fold', 'HUC4'], axis=1)
 # Log-transform target
 y = np.log1p(y)
 
-# Build Graph
+# Building the Graph
 print("\nBuilding graph structure...")
 coords = X[["ActivityLocation/LatitudeMeasure",
             "ActivityLocation/LongitudeMeasure"]].values
@@ -115,14 +100,12 @@ edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
 
 print(f"Graph constructed with {len(X_scaled)} nodes and {edge_index.shape[1]} edges")
 
+# Prepare PyG Data
 x = torch.tensor(X_scaled, dtype=torch.float)
 y_tensor = torch.tensor(y_array, dtype=torch.float)
 
 # K-Fold Cross-Validation
 K_FOLDS = len(np.unique(fold_labels))
-print(f"\n{'='*70}")
-print(f"STARTING {K_FOLDS}-FOLD GEOGRAPHIC CROSS-VALIDATION")
-print(f"{'='*70}")
 
 # Storage for results
 fold_results = []
@@ -141,6 +124,7 @@ for fold_idx in range(K_FOLDS):
     print(f"Train samples: {n_train:,} ({n_train/len(X_scaled)*100:.1f}%)")
     print(f"Test samples:  {n_test:,} ({n_test/len(X_scaled)*100:.1f}%)")
     
+    # Create PyG Data object
     data = Data(x=x, edge_index=edge_index, y=y_tensor).to(device)
     
     # Initialize model
@@ -162,7 +146,7 @@ for fold_idx in range(K_FOLDS):
     patience_counter = 0
     patience = 50
     
-    for epoch in range(100):
+    for epoch in range(500):
         model.train()
         optimizer.zero_grad()
         output = model(data.x, data.edge_index)
@@ -196,22 +180,40 @@ for fold_idx in range(K_FOLDS):
     mse_log = mean_squared_error(y_true_test, y_pred_test)
     r2_log = r2_score(y_true_test, y_pred_test)
     
-    # Metrics in original space
+    # Convert to original space
     y_pred_orig = np.expm1(y_pred_test.flatten())
     y_true_orig = np.expm1(y_true_test.flatten())
-    mae_orig = mean_absolute_error(y_true_orig, y_pred_orig)
-    mse_orig = mean_squared_error(y_true_orig, y_pred_orig)
-    r2_orig = r2_score(y_true_orig, y_pred_orig)
-    rmse_orig = np.sqrt(mse_orig)
+    
+    # Filter for real-space metrics: 0 <= y <= 100 and no negative predictions
+    real_space_filter = (y_true_orig >= 0) & (y_true_orig <= 100) & (y_pred_orig >= 0)
+    y_pred_filtered = y_pred_orig[real_space_filter]
+    y_true_filtered = y_true_orig[real_space_filter]
+    
+    n_test_filtered = len(y_true_filtered)
+    n_test_removed = len(y_true_orig) - n_test_filtered
+    
+    # Metrics in original space (filtered: 0-100 µg/L, no negative predictions)
+    if n_test_filtered > 0:
+        mae_orig = mean_absolute_error(y_true_filtered, y_pred_filtered)
+        mse_orig = mean_squared_error(y_true_filtered, y_pred_filtered)
+        r2_orig = r2_score(y_true_filtered, y_pred_filtered)
+        rmse_orig = np.sqrt(mse_orig)
+    else:
+        mae_orig = mse_orig = r2_orig = rmse_orig = np.nan
+        print(f"WARNING: No valid samples for real-space metrics in Fold {fold_idx + 1}")
     
     print(f"\n--- Fold {fold_idx + 1} Results ---")
-    print(f"Log Space:  MAE={mae_log:.4f}, MSE={mse_log:.4f}, R²={r2_log:.4f}")
-    print(f"Real Space: MAE={mae_orig:.4f} µg/L, RMSE={rmse_orig:.4f} µg/L, R²={r2_orig:.4f}")
+    print(f"Log Space (all data):  MAE={mae_log:.4f}, MSE={mse_log:.4f}, R²={r2_log:.4f}")
+    print(f"Real Space (0-100 µg/L, {n_test_filtered}/{n_test} samples): MAE={mae_orig:.4f} µg/L, RMSE={rmse_orig:.4f} µg/L, R²={r2_orig:.4f}")
+    if n_test_removed > 0:
+        print(f"  Note: {n_test_removed} samples excluded from real-space metrics (y>100 or negative predictions)")
     
     fold_results.append({
         'fold': fold_idx + 1,
         'n_train': n_train,
         'n_test': n_test,
+        'n_test_filtered': n_test_filtered,
+        'n_test_removed': n_test_removed,
         'mae_log': mae_log,
         'mse_log': mse_log,
         'r2_log': r2_log,
@@ -221,45 +223,38 @@ for fold_idx in range(K_FOLDS):
         'r2_orig': r2_orig
     })
 
-# Summary Statistics
-print(f"\n{'='*70}")
-print(f"SUMMARY: {K_FOLDS}-FOLD CROSS-VALIDATION RESULTS")
-print(f"{'='*70}")
-
 results_df = pd.DataFrame(fold_results)
 
-print("\n" + "="*70)
 print("PERFORMANCE FOR EACH FOLD:")
-print("="*70)
 
 for idx, row in results_df.iterrows():
     print(f"\nFold {row['fold']}:")
     print(f"  Training samples: {row['n_train']:,}")
-    print(f"  Test samples:     {row['n_test']:,}")
-    print(f"  Log Space Metrics:")
+    print(f"  Test samples:     {row['n_test']:,} (filtered: {row['n_test_filtered']:,}, removed: {row['n_test_removed']:,})")
+    print(f"  Log Space Metrics (all data):")
     print(f"    MAE:  {row['mae_log']:.4f}")
     print(f"    MSE:  {row['mse_log']:.4f}")
     print(f"    R²:   {row['r2_log']:.4f}")
-    print(f"  Real Space Metrics (µg/L):")
-    print(f"    MAE:  {row['mae_orig']:.4f}")
-    print(f"    RMSE: {row['rmse_orig']:.4f}")
+    print(f"  Real Space Metrics (0-100 µg/L only):")
+    print(f"    MAE:  {row['mae_orig']:.4f} µg/L")
+    print(f"    RMSE: {row['rmse_orig']:.4f} µg/L")
     print(f"    R²:   {row['r2_orig']:.4f}")
 
 print("\n" + "="*70)
 print("AVERAGE PERFORMANCE ACROSS ALL FOLDS:")
 print("="*70)
-print(f"\nLog Space Metrics:")
+print(f"\nLog Space Metrics (all data):")
 print(f"  MAE:  {results_df['mae_log'].mean():.4f} ± {results_df['mae_log'].std():.4f}")
 print(f"  MSE:  {results_df['mse_log'].mean():.4f} ± {results_df['mse_log'].std():.4f}")
 print(f"  R²:   {results_df['r2_log'].mean():.4f} ± {results_df['r2_log'].std():.4f}")
 
-print(f"\nReal Space Metrics (µg/L):")
-print(f"  MAE:  {results_df['mae_orig'].mean():.4f} ± {results_df['mae_orig'].std():.4f}")
-print(f"  RMSE: {results_df['rmse_orig'].mean():.4f} ± {results_df['rmse_orig'].std():.4f}")
+print(f"\nReal Space Metrics (0-100 µg/L only):")
+print(f"  MAE:  {results_df['mae_orig'].mean():.4f} ± {results_df['mae_orig'].std():.4f} µg/L")
+print(f"  RMSE: {results_df['rmse_orig'].mean():.4f} ± {results_df['rmse_orig'].std():.4f} µg/L")
 print(f"  R²:   {results_df['r2_orig'].mean():.4f} ± {results_df['r2_orig'].std():.4f}")
 
+print(f"\nTotal samples removed across all folds: {results_df['n_test_removed'].sum():,}")
+
 # Save results
-results_df.to_csv('kfold_results.csv', index=False)
-print(f"\n{'='*70}")
-print("Results saved to 'kfold_results.csv'")
-print(f"{'='*70}")
+results_df.to_csv('gat_kfold_results.csv', index=False)
+print("Results saved to 'gat_kfold_results.csv'")
