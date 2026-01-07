@@ -7,6 +7,5 @@ torch-geometric
 xgboost
 lightgbm
 catboost
-seaborn
 shap
 cartopy

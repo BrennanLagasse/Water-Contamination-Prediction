@@ -6,7 +6,6 @@ from catboost import CatBoostRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 
-import seaborn as sns
 import matplotlib.pyplot as plt
 import shap
 import cartopy.crs as ccrs
