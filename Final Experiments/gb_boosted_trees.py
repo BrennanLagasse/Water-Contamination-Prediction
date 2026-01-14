@@ -4,10 +4,7 @@ from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 from catboost import CatBoostRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, precision_recall_curve, average_precision_score
-
-import seaborn as sns
-import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # Load Data
 df = pd.read_csv("final_dataset.csv")
@@ -21,6 +18,7 @@ X = X.drop(["CharacteristicName", "id"], axis=1)
 print(f"X shape: {X.shape}")
 print(f"y shape: {y.shape}")
 
+# & (y <= 100) 
 mask = (y >= 0) & (~np.isnan(y)) & (~np.isinf(y))
 X = X[mask]
 y = y[mask]
@@ -34,16 +32,19 @@ print("Median y:", y.median())
 
 X = X.values.astype(np.float32)
 y = y.values.astype(np.float32).reshape(-1, 1)
-y = (y > 10).astype(int)
+
+# Log-transform target
+y = np.log1p(y)
 
 # Train/val/test split
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Train Gradient Boosted Tree
-model = XGBRegressor(n_estimators=2000, learning_rate=0.05, max_depth=6, n_jobs=-1)
+model = XGBRegressor(n_estimators=2000, objective="reg:absoluteerror", learning_rate=0.05, max_depth=6, n_jobs=-1)
 #model = LGBMRegressor(n_estimators=2000, learning_rate=0.05, num_leaves=127, n_jobs=-1)
 #model = CatBoostRegressor(iterations=2000, learning_rate=0.05, depth=16, loss_function="MAE", eval_metric="MAE", random_seed=42, verbose=0, task_type="CPU")
 
+# Fit model
 model.fit(
     X_train, y_train,
     eval_set=[(X_val, y_val)]
@@ -52,48 +53,23 @@ model.fit(
 # Training Set Evaluation
 y_train_pred = model.predict(X_train)
 
+train_mae = mean_absolute_error(y_train, y_train_pred)
+train_mse = mean_squared_error(y_train, y_train_pred)
+train_r2 = r2_score(y_train, y_train_pred)
+
 print("\n=== Train Set Evaluation ===")
-print(classification_report(y_train, y_train_pred))
+print(f"Train MAE:  {train_mae:.4f} µg/L")
+print(f"Train MSE:  {train_mse:.4f} µg/L")
+print(f"Train R²:   {train_r2:.4f}")
 
 # Validation Set Evaluation
 y_val_pred = model.predict(X_val)
 
+val_mae = mean_absolute_error(y_val, y_val_pred)
+val_mse = mean_squared_error(y_val, y_val_pred)
+val_r2 = r2_score(y_val, y_val_pred)
+
 print("\n=== Val Set Evaluation ===")
-print(classification_report(y_val, y_val_pred))
-
-plt.figure(figsize=(6,6))
-plt.scatter(y_val, y_val_pred, alpha=0.5, label="Predictions")
-plt.plot([y_val.min(), y_val.max()], [y_val.min(), y_val.max()],
-         'r--', label="x = y (Perfect Prediction)")
-plt.xlabel("Actual Values")
-plt.ylabel("Predicted Values")
-plt.title("Predicted vs Actual (Validation Set)")
-plt.legend()
-plt.grid(True)
-plt.show()
-# Charts
-fig, ax = plt.subplots(2, 2, figsize=(10, 10))
-
-train_cm = confusion_matrix(y_train, y_train_pred)
-val_cm = confusion_matrix(y_val, y_val_pred)
-y_val_proba = model.predict_proba(X_val)[:, 1]
-precision, recall, thresholds = precision_recall_curve(y_val, y_val_proba)
-avg_precision = average_precision_score(y_val, y_val_proba)
-
-sns.heatmap(train_cm, annot=True, cbar=True, fmt="d", cmap="Blues", xticklabels=["Safe", "Not Safe"], yticklabels=["Safe", "Not Safe"], ax=ax[0, 0])
-ax[0, 0].set_xlabel("Predicted Label")
-ax[0, 0].set_ylabel("Actual Label")
-ax[0, 0].set_title("Training Confusion Matrix")
-
-sns.heatmap(val_cm, annot=True, cbar=True, fmt="d", cmap="Blues", xticklabels=["Safe", "Not Safe"], yticklabels=["Safe", "Not Safe"], ax=ax[0, 1])
-ax[0, 1].set_xlabel("Predicted Label")
-ax[0, 1].set_ylabel("Actual Label")
-ax[0, 1].set_title("Validation Confusion Matrix")
-
-ax[1, 0].plot(recall, precision, label=f"Average precision: {avg_precision:.2f}")
-ax[1, 0].set_xlabel("Recall")
-ax[1, 0].set_ylabel("Precision")
-ax[1, 0].set_title("Precision-Recall Curve")
-
-plt.tight_layout()
-plt.show()
+print(f"Validation MAE:  {val_mae:.4f} µg/L")
+print(f"Validation MSE:  {val_mse:.4f} µg/L")
+print(f"Validation R²:   {val_r2:.4f}")
